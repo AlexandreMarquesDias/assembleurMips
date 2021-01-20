@@ -221,7 +221,7 @@ main:
     				jr $t9   #return to caller
     			
     			
-	boolstrCmp: #AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA SI MAJUSCULE, FAIRE -20 EN HEXA
+	boolstrCmp: # SI MAJUSCULE, FAIRE -20 EN HEXA
 		
 		#a0 = str1, a1= str2
 		add $s3, $0, $0 # i=0
