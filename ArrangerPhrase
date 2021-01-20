@@ -1,0 +1,349 @@
+#segment de la mémoire contenant les données globales
+.data
+#tampon résérvé pour le texte
+    buffer: .space 300
+
+    str1:  .asciiz "texte : "
+    msg:  .asciiz "\n Vous avez saisi le texte suivant: "
+    nbmots:  .asciiz "\n Nombre de mots : "
+    nontrie: .asciiz "\n \nTableau de mots non trié: "
+    trie:  .asciiz "\n \nTableau de mots trié: "
+.text
+
+#segment de la mémoire contenant le code
+main:
+	saisir:
+   		la $a0, str1    # Load et print str1
+   		li $v0, 4
+   		syscall
+	
+   		li $v0, 8       # prend un input
+	
+    		la $a0, buffer  # load byte space into address
+    		li $a1, 300      # allot the byte space for string
+    		
+    		#ca va seulement enregistrer 299 characteres de texte au maximum
+
+   		move $s7, $a0   # enregistre le string dans s7 
+    		syscall
+
+    		la $a0, msg    # load et print msg 'vous avez saisi...'
+   	 	li $v0, 4
+   	 	syscall
+    
+    
+		
+		jal decMots    #call function
+		add $t3, $v0, $0  #valeur de retour adresse du tableau
+		add $t4, $v1, $0  #valeur de retour nb element
+		
+		la $a0, buffer  # reload byte space to primary address
+   	 	move $a0, $s7   # primary address = s7 address (load pointer)
+   	 	li $v0, 4       # print le input
+  	  	syscall
+		
+		li $v0, 4        
+    		la $a0, nbmots     # nb de mots
+    		syscall          
+		
+		addi $a0, $t4, 0  # ici on print le nombre de mots
+        	addi $v0, $zero, 1   # Prepare syscall 0
+        	syscall
+  		
+  		la $a0, nontrie    
+   	 	li $v0, 4
+   	 	syscall
+  		
+  		add $a0, $t3, $0
+  		jal afficher    #call function	
+  		
+  		add $a0, $t3, $0
+  		jal trier
+  		
+  		la $a0, trie    
+   	 	li $v0, 4
+   	 	syscall
+  		
+  		add $a0, $s5, $0
+  		jal afficher    #call function
+  		
+		li $v0, 10      # fin programme
+		syscall
+		
+	boolLettre:	# boolLettre(char x)
+		slti $t0, $a0, 65   # if x < 'A' (A est 0x41 = 65 en decimal) then $t0 = 1 else $t0 = 0
+		bne $t0, $0, else1   # if $t0 != 0 then goto else1
+		slti $t0, $a0, 91   # if x < 'Z' (Z est 0x5A = 90 en decimal) then $t0 = 1 else $t0 = 0
+		bne $t0, $0, done1   # if $t0 != 0 then goto done1
+		slti $t0, $a0, 97   # if x < 'a' 
+		bne $t0, $0, else1   # if $t0 != 0 then goto else1
+		slti $t0, $a0, 123   # if x < 'z' 
+		bne $t0, $0, done1   # if $t0 != 0 then goto done1
+		else1:
+			add $v0, $0, $0   # retourne 0
+			jr $ra   #return to caller
+		done1:
+			addi $v0, $0, 1   # retourne 1 
+			jr $ra   #return to caller
+
+
+	decMots: 	# decMots(texte, taille)
+	
+		#initialise une table de de lettre d'un mot voir p.321 du livre
+		lui $s0, 0x1000
+		
+		#initialise une table de de mots, qui contient des tables de lettre de mot voir p.321 du livre
+		lui $s4, 0x1000
+		
+		
+    		li $t1, 0       #t1 will be iterator, starting at 0
+    		add $t9, $ra, $0    #se souvenir de adress de retour
+    		addi $s5, $0, 1 #nouveau mot. 1=true 0=false COMMENCE TRUE
+    		
+		loop1:
+    			add $s1, $s7, $t1   #$s1 = message[i] ET $s7 est notre message input
+    			lb $s2, 0($s1)      #Loading char 
+    			
+   			beq $s2, $0, exit1   # si caractere est NULL (=0), on sort du loop
+   			addi $t1, $t1, 1    #i++
+   			
+   			add $a0, $0, $s2   #argument 0 = char $s2
+    			jal boolLettre    #call function	
+			beq $v0, $0, PasUneLettre	# CALL FUNCTION
+			beq $s5, $0, pasNouveauMot 	#si nouveau mot=true on cree un mot sous forme de tableau de lettre pour le tableau de mots
+		
+			addi $s0, $s0, 0x100 #prochain array il faut faire +100 pour donner de l'espace au mot
+			add $s6, $0, $0 #reinitialise i = 0
+			
+			#enregistre adresse le tableau de lettre, dans le tableau de mots
+			sll $t3, $s3, 2   # step to next array cell, (bond de 4)
+			add $t3, $t3, $s4	#t3 = t3 + adresse de base du tableau de mots
+			
+			sw $s0, 0($t3) # list[i] = adresse tableau du prochain mot
+			
+			addi $s3, $s3, 1 #i++
+						
+			addi $s5, $0, 0 #nouveau mot  false
+		pasNouveauMot:
+			#sinon, si cest une lettre, alors ajouter dans le tableau de son mot
+			
+			sll $t0, $s6, 2   # step to next array cell, (bond de 4)
+			add $t0, $t0, $s0	#t0 = t0 + adresse de base du tableau
+			
+			sw $s2, 0($t0) # list[i] = char $s2
+			
+			addi $s6, $s6, 1 #i++
+			
+    			j loop1    #Going back to the beginning of the loop
+    			
+    		PasUneLettre:
+    			
+    			addi $s5, $0, 1 #nouveau mot  true
+    			
+    			
+    			#check si \n\n fin de texte ################################## CODE OPTIONNEL ################################
+    			addi $t4, $0, 0x5c # 5c = '\'
+    			bne $s2, $t4, pasbreak
+    
+    			add $s1, $s7, $t1   #$s1 = message[i] ET $s7 est notre message input
+    			lb $s2, 0($s1)      #Loading char 
+   			addi $t1, $t1, 1    #i++	
+    			
+    			addi $t4, $0, 0x6e # 6e = 'n'
+    			bne $s2, $t4, pasbreak
+			
+    			
+    			add $s1, $s7, $t1   #$s1 = message[i] ET $s7 est notre message input
+    			lb $s2, 0($s1)      #Loading char 
+   			addi $t1, $t1, 1    #i++
+    			
+    			addi $t4, $0, 0x5c # 5c = '\'
+    			bne $s2, $t4, pasbreak
+    			
+    			add $s1, $s7, $t1   #$s1 = message[i] ET $s7 est notre message input
+    			lb $s2, 0($s1)      #Loading char 
+   			addi $t1, $t1, 1    #i++ 
+    			
+    			addi $t4, $0, 0x6e # 6e = 'n'
+    			bne $s2, $t4, pasbreak
+    			
+    			addi $t2, $0, 0x20
+    			sb $t2, 0($s1)
+    			
+    			subi $t1, $t1, 1    #i-- 
+    			add $s1, $s7, $t1   #$s1 = message[i] ET $s7 est notre message input
+    			
+   			addi $t2, $0, 0x20
+    			sb $t2, 0($s1)
+    			
+    			subi $t1, $t1, 1    #i-- 
+    			add $s1, $s7, $t1   #$s1 = message[i] ET $s7 est notre message input
+    			
+   			addi $t2, $0, 0x20
+    			sb $t2, 0($s1)
+    			
+    			subi $t1, $t1, 1    #i-- 
+    			add $s1, $s7, $t1   #$s1 = message[i] ET $s7 est notre message input
+    			
+   			addi $t2, $0, 0x20
+    			sb $t2, 0($s1)
+    			
+    			subi $t1, $t1, 1    #i-- 
+    			add $s1, $s7, $t1   #$s1 = message[i] ET $s7 est notre message input
+    			
+   			addi $t2, $0, 0x20
+    			sb $t2, 0($s1)
+    			#check si \n\n fin de texte ################################## CODE OPTIONNEL ################################
+    			j exit1
+    		pasbreak:	
+    			j loop1
+    			
+    		
+    		exit1: 
+    			#on compte les éléments du tableau de mots s4    
+    			add $s3, $0, $0 #reinitialise i = 0
+    			add $s1, $0, $0 
+    			loop2:
+    				#enregistre adresse de ce tableau de lettre, dans le tableau de mots
+				sll $t3, $s3, 2   # step to next array cell, (bond de 4)
+				add $t3, $t3, $s4	#t3 = t3 + adresse de base du tableau de mots
+				
+				lw $t0, 0($t3)
+				beq $t0, $0, exit2
+				
+				add $s1, $s1, 1 #nombre d'element++
+				
+				addi $s3, $s3, 1 #i++
+				j loop2
+			exit2:
+				add $v0, $s4, $0 #retourne tableau de mots
+				add $v1, $s1, $0 #retourne nb elements (nb de mots)
+    				jr $t9   #return to caller
+    			
+    			
+	boolstrCmp: #AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA SI MAJUSCULE, FAIRE -20 EN HEXA
+		
+		#a0 = str1, a1= str2
+		add $s3, $0, $0 # i=0
+		addi $v0, $0, 1 # si $v0=1 alors str1<str2
+		loop3:	
+			
+			sll $t0, $s3, 2   # step to next array cell, (bond de 4)
+			add $t0, $t0, $a0	#t1 = t1 + adresse de base du tableau str1
+			
+			sll $t1, $s3, 2   # step to next array cell, (bond de 4)
+			add $t1, $t1, $a1	#t1 = t1 + adresse de base du tableau str2
+			
+			addi $s3, $s3, 1 #i++
+				
+			lw $t2, 0($t0) #lettre du mot str1
+			lw $t3, 0($t1) #lettre du mot str2
+			
+			beq $t3, $t2, loop3  #même lettre
+			
+			beq $t2, $0, exit3
+				#str1 plus petit retourne 1 (moins de lettres que str2)
+			addi $v0, $0, 0	
+			beq $t3, $0, exit3
+				#str1 plus grand retourne 0
+					
+			slt $v0, $t2, $t3   # if lettre1 < lettre2 then $s1 = 1 else $s1 = 0
+		exit3:
+			jr $ra   #return to caller
+				#retourne v0
+				
+				
+    	trier: #BUBBLE SORT
+    		add $t9, $ra, $0    #se souvenir de adress de retour
+    		add $s5, $a0, $0 #se souvenir de argument
+    		addi $s2, $0, 0 #sorted = false
+    		loop4:
+    			bne $s2, $0, exit4
+    			
+    			add $s4, $0, $0 # i=0
+    			addi $s2, $0, 1 #plus petit = true
+    			addi $s2, $0, 1 #sorted = true
+    			loop5:
+    				sll $t7, $s4, 2   # step to next array cell, (bond de 4)
+				add $t7, $t7, $s5	#t1 = t1 + adresse de base du tableau
+				
+				lw $s0, 0($t7) #un mot i
+				lw $s1, 4($t7) #un mot i+1
+				addi $s4, $s4, 1 #i++
+				
+				beq $s1, $0, loop4
+				
+				add $a0, $s0, $0
+				add $a1, $s1, $0
+				jal boolstrCmp  #verifie si mot i < mot i+1
+				
+				bne $v0, $0, loop5
+				
+				#ICI ON SWAP
+				add $t6, $s0, $0 #mot i = t
+				sw $s1, 0($t7)  #mot i = mot i+1
+				sw $t6, 4($t7)  #mot i+1 = t
+				
+				addi $s2, $0, 0 #sorted = false
+				
+				j loop5
+		exit4:		
+			jr $t9
+			
+	afficher:
+		add $s6, $0, $0 # i=0
+		add $s3, $a0, $0 # sauvegarde arg
+		add $s4, $0, 0 #compteur de mots (4 par ligne)
+		
+		li $v0, 11
+		li $a0, 0x0A # nouvelle ligne
+		syscall	
+		
+		loop6:
+			
+			sll $t7, $s6, 2   # step to next array cell, (bond de 4)
+			add $t7, $t7, $s3	#t7 = t7 + adresse de base du tableau
+				
+			lw $s0, 0($t7) #un mot i
+			
+			beq $s0, $0, exit6
+			
+			
+			addi $t2,$0, 4 
+			bne $s4, $t2, skipNouvelleLigne
+			
+			add $s4, $0, 0 #compteur de mots (4 par ligne)
+			
+			li $v0, 11
+			li $a0, 0x0A # nouvelle ligne
+			syscall	
+			
+			
+		skipNouvelleLigne:
+			add $s4, $s4, 1 #compteur de mots (4 par ligne)
+			addi $s6, $s6, 1 #i++
+			add $s7, $0, $0 # j=0
+			loop7:
+				sll $t6, $s7, 2   # step to next array cell, (bond de 4)
+				add $t6, $t6, $s0	#t1 = t1 + adresse de base du tableau
+				
+				lw $s1, 0($t6) #une lettre
+				beq $s1, $0, exit7
+			
+				addi $s7, $s7, 1 #j++
+				
+				li $v0, 11
+				lb $a0, 0($t6) # print list element
+				syscall
+				j loop7
+			exit7:
+				li $v0, 11
+				li $a0, 0x20 # espace
+				syscall	
+				j loop6
+			
+		exit6:
+			li $v0, 11
+			li $a0, 0x0A # nouvelle ligne
+			syscall	
+			jr $ra 
